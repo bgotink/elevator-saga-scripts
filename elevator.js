@@ -155,6 +155,24 @@ export default class Elevator extends EventEmitter {
   continue() {
     log.info `continue ${this.id}: called`
 
+    if (this.isFull()) {
+      log.info `continue ${this.id}: elevator is full, removing all superfluous requests`
+      const pressedFloors = this[kBase].getPressedFloors().map(floor => this[kFloors][floor]);
+      const superfluous = [];
+
+      for (let i = this[kQueue].length - 1; i >= 0; i--) {
+        if (!pressedFloors.includes(this[kQueue][i])) {
+          superfluous.push(this[kQueue][i]);
+          this[kQueue].splice(i, 1);
+        }
+      }
+
+      if (superfluous.length) {
+        log.info `continue ${this.id}: Unscheduling ${superfluous.length} requests`;
+        this.fire('unschedule', superfluous);
+      }
+    }
+
     if (!this[kQueue].length) {
       log.info `continue ${this.id}: nothing in the queue, stopping elevator & firing 'idle' event`
       this[kBase].stop();
@@ -190,5 +208,9 @@ export default class Elevator extends EventEmitter {
     }
 
     this[kBase].goToFloor(floor.number);
+  }
+
+  isFull() {
+    return this[kBase].loadFactor() >= 0.8;
   }
 }

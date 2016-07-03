@@ -26,6 +26,11 @@ export default createStrategy(function init(elevators, floors) {
     }
   });
 
+  elevator.on('unschedule', floors => {
+    const { direction } = elevator;
+    floors.forEach(floor => scheduleRequest(floor, elevator));
+  })
+
   floors.forEach(floor => {
     floor.on('request-elevator', direction => {
       scheduleRequest(floor, direction);
@@ -44,7 +49,7 @@ export default createStrategy(function init(elevators, floors) {
       return;
     }
 
-    if (elevator.willPassBy(floor, direction)) {
+    if (!elevator.isFull() && elevator.willPassBy(floor, direction)) {
       elevator.schedule(floor);
       return;
     }
