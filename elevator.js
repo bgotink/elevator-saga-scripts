@@ -1,60 +1,21 @@
 import EventEmitter from './event-emitter';
+import Floor from './floor';
 
 const kBase = Symbol('base');
-const kRequestedFloors = Symbol('requestedFloors');
 const kQueue = Symbol('queue');
 const kFloors = Symbol('floors');
+const kDirection = Symbol('direction');
 const kCurrentTarget = Symbol('currentTarget');
-
-function getRequestedFloors(elevator, priority) {
-  return elevator[kRequestedFloors][priority ? 'priority' : 'normal'];
-}
-
-function getNextTargetFloor(elevator) {
-  if (elevator[kQueue].length) {
-    return null;
-  }
-
-  return elevator[kQueue][0].floor;
-}
-
-function sortByDistanceAndDirection(floors, targetFloor, targetDirection) {
-  floors.sort((a, b) => {
-    let result = 0;
-
-    let dirA = targetFloor.getDirectionTo(a.floor);
-    let dirB = targetFloor.getDirectionTo(b.floor);
-
-    if (dirA === targetDirection && dirB === targetDirection) {
-      return targetFloor.getDistance(a.floor) - targetFloor.getDistance(b.floor);;
-    } else if (dirA === targetDirection) {
-      return -1;
-    } else {
-      return 1;
-    }
-  });
-}
-
-function findClosestRequest(floor, otherFloors) {
-  return otherFloors.reduce((previous, current) => {
-    if (previous.floor.getDistance(floor) < current.floor.getDistance(floor)) {
-      return previous;
-    } else {
-      return current;
-    }
-  });
-}
 
 export default class Elevator extends EventEmitter {
   constructor(base, floors) {
     super();
 
     this[kBase] = base;
-    this[kRequestedFloors] = { normal: [], priority: [] };
-    this[kQueue] = [];
-
     this[kFloors] = floors;
-    this[kCurrentTarget] = null;
+
+    this[kQueue] = [];
+    this.direction = null;
 
     base.on('idle', _ => {
       this.continue();
@@ -63,137 +24,131 @@ export default class Elevator extends EventEmitter {
     // Schedule an important floor when a passenger selects a floor
     // But don't care about the direction
     base.on('floor_button_pressed', floor => {
-      this.schedulePriority(floors[floor]);
+      this.schedule(floors[floor]);
     });
   }
 
-  get currentFloor() {
+  get floor() {
     return this[kFloors][this[kBase].currentFloor()];
+  }
+
+  get direction() {
+    return this[kDirection];
+  }
+
+  isIdle() {
+    return this[kDirection] == null;
+  }
+
+  set direction(dir) {
+    if (dir === this[kDirection]) {
+      return dir;
+    }
+
+    this[kBase].goingDownIndicator(dir === 'down');
+    this[kBase].goingUpIndicator(dir === 'up');
+
+    return this[kDirection] = dir;
+  }
+
+  schedule(requestedFloor) {
+    const { direction, floor } = this;
+
+    if (requestedFloor === floor) {
+      return; // we're already on the requested floor
+    }
+
+    const requestedDirection = floor.getDirectionTo(requestedFloor);
+
+    if (this.isIdle()) {
+      this[kQueue].push(requestedFloor);
+      this.direction = requestedDirection;
+      this.continue();
+      this.fire('schedule', requestedFloor, requestedDirection);
+      return;
+    }
+
+    if (direction !== requestedDirection) {
+      throw new Error(`Requested ${requestedFloor} in direction ${requestedDirection} (currently at ${floor}), but currently going in direction ${direction}`);
+    }
+
+    this.fire('schedule', requestedFloor);
+
+    if (direction === 'up') {
+      if (requestedFloor < this[kCurrentTarget]) {
+        // We pass the new request first, and only then we pass our current target
+        // -> make the requested floor the first target
+        this[kQueue].unshift(requestedFloor, this[kCurrentTarget]);
+        this.continue();
+        return;
+      }
+
+      for (let i = 0; i < this[kQueue].length; i++) {
+        if (requestedFloor < this[kQueue][i]) {
+          // We pass the requested floor before queued floor _i_
+          // -> insert the requested floor here
+          this[kQueue].splice(i, 0, requestedFloor);
+          // No need to call continue() here
+          return;
+        }
+      }
+
+      // We haven't inserted the floor anywhere -> add it to the end of the queue
+      this[kQueue].push(requestedFloor);
+    } else /*if (direction === 'down')*/ {
+      if (requestedFloor > this[kCurrentTarget]) {
+        // We pass the new request first, and only then we pass our current target
+        // -> make the requested floor the first target
+        this[kQueue].unshift(requestedFloor, this[kCurrentTarget]);
+        this.continue();
+        return;
+      }
+
+      for (let i = 0; i < this[kQueue].length; i++) {
+        if (requestedFloor > this[kQueue][i]) {
+          // We pass the requested floor before queued floor _i_
+          // -> insert the requested floor here
+          this[kQueue].splice(i, 0, requestedFloor);
+          // No need to call continue() here
+          return;
+        }
+      }
+
+      // We haven't inserted the floor anywhere -> add it to the end of the queue
+      this[kQueue].push(requestedFloor);
+    }
   }
 
   continue() {
     if (!this[kQueue].length) {
-      this[kCurrentTarget] = null;
       this[kBase].stop();
-      this.setDirectionIndicators(null);
+      this.direction = null;
       this.fire('idle');
       return;
     }
 
     this[kCurrentTarget] = this[kQueue].shift();
 
-    this.setDirectionIndicators(this[kCurrentTarget].direction);
-
     this[kBase].stop();
-    this[kBase].goToFloor(this[kCurrentTarget].floor);
+    this.goTo(this[kCurrentTarget]);
   }
 
-  setDirectionIndicators(direction) {
-    this[kBase].goingUpIndicator(direction !== 'down');
-    this[kBase].goingDownIndicator(direction !== 'up');
-  }
+  start(floors, direction) {
+    this.direction = direction;
+    this[kQueue] = floors;
 
-  schedule(floor, direction) {
-    if (this[kCurrentTarget] && !this[kCurrentTarget].priority) {
-      if (this[kCurrentTarget].floor === floor && this[kCurrentTarget].direction === direction) {
-        return;
-      }
-    }
-
-    const requestedFloors = getRequestedFloors(this, false);
-
-    if (requestedFloors.some(rf => rf.floor === floor && rf.direction === direction)) {
-      return;
-    }
-
-    requestedFloors.push({ floor, direction, priority: false });
-    this.recalculateSchedule();
-  }
-
-  schedulePriority(floor) {
-    if (this[kCurrentTarget] && this[kCurrentTarget].priority) {
-      if (this[kCurrentTarget].floor === floor) {
-        return;
-      }
-    }
-
-    const requestedFloors = getRequestedFloors(this, true);
-
-    if (requestedFloors.some(rf => rf.floor === floor)) {
-      return;
-    }
-
-    requestedFloors.push({ floor, priority: true });
-    this.recalculateSchedule();
-  }
-
-  recalculateSchedule() {
-    const { currentFloor } = this;
-    const queue = [{ floor: currentFloor }];
-    const priorityRequests = getRequestedFloors(this, true).slice(0);
-
-    if (this[kCurrentTarget] && this[kCurrentTarget].priority) {
-      // We're currently en route to a target, which will ofc still be a target
-      priorityRequests.push(this[kCurrentTarget]);
-    }
-
-    // Sort the current targets by distance to the current floor,
-    // then add to the queue
-    if (priorityRequests.length) {
-      let closestRequest = findClosestRequest(currentFloor, priorityRequests);
-      let startDirection = currentFloor.getDirectionTo(closestRequest.floor);
-
-      sortByDistanceAndDirection(priorityRequests, currentFloor, startDirection);
-
-      queue.push(...priorityRequests);
-
-      queue.reduce((previous, current) => {
-        previous.direction = previous.floor.getDirectionTo(current.floor);
-
-        return current;
-      });
-
-      queue[queue.length - 1].direction = null;
-    }
-
-    const normalRequests = getRequestedFloors(this, false).slice(0);
-
-    if (this[kCurrentTarget] && !this[kCurrentTarget].priority) {
-      normalRequests.push(this[kCurrentTarget]);
-    }
-
-    if (normalRequests.length) {
-      if (queue.length) {
-        sortByDistanceAndDirection(normalRequests, currentFloor, currentFloor.getDirectionTo(queue[0].floor));
-
-        for (let i = 0, j = 0; i < normalRequests.length; i++) {
-          const currentRequest = normalRequests[i];
-
-          if (j >= queue.length) {
-            const restOfRequests = normalRequests.slice(i);
-            const lastInQueue = queue[queue.length - 1];
-            let direction;
-
-            if (queue.length > 2) {
-              // continue in the current direction if we have a direction
-              direction = queue[queue.length - 2].getDirectionTo(lastInQueue);
-            } else {
-              // or find the closest target and go there
-              direction = lastInQueue.getDirectionTo(findClosestRequest(lastInQueue, normalRequests));
-            }
-
-            sortByDistanceAndDirection(restOfRequests, lastInQueue, direction);
-
-            break;
-          }
-        }
-      }
-    }
-
-    // Remove the first element in the queue, that's the current floor
-    queue.shift();
-
-    this.fire('rescheduled');
     this.continue();
+  }
+
+  goTo(floor) {
+    if (!(floor instanceof Floor)) {
+      floor = this[kFloors][floor];
+    }
+
+    if (floor === this.floor) {
+      return;
+    }
+
+    this[kBase].goToFloor(floor.number);
   }
 }

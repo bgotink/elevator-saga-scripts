@@ -44,4 +44,12 @@ export default class Floor extends EventEmitter {
       return floorA.liesAbove(this) && this.liesAbove(floorB);
     }
   }
+
+  toString() {
+    return `floor ${this.number}`;
+  }
+
+  valueOf() {
+    return this.number;
+  }
 }

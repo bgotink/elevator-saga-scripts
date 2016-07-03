@@ -1,3 +1,5 @@
+import * as log from './log';
+
 const kListeners = Symbol('listeners');
 
 function hasListeners(eventEmitter, event) {
@@ -43,8 +45,12 @@ export default class EventEmitter {
       try {
         listener(...args);
       } catch (e) {
-        console.error(e);
+        this.handleError(event, e);
       }
     });
+  }
+
+  handleError(event, e) {
+    log.error `Error while firing ${event}: ${e && e.stack ? e.stack : e}`;
   }
 }
