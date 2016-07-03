@@ -78,6 +78,7 @@ export default createStrategy(function init(elevators, floors) {
     log.info `Going for a ride ${direction}`;
 
     const requestsToWrite = [];
+    const freeSpace = elevator.getFreeSpace();
 
     // Reverse loop because we're splicing
     for (let i = nonScheduledRequests.length - 1; i >= 0; i--) {
@@ -85,6 +86,10 @@ export default createStrategy(function init(elevators, floors) {
       if (current.direction === direction) {
         nonScheduledRequests.splice(i, 1);
         requestsToWrite.push(current);
+
+        if (requestsToWrite.length >= freeSpace) {
+          break;
+        }
       }
     }
 

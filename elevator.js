@@ -210,6 +210,14 @@ export default class Elevator extends EventEmitter {
     this[kBase].goToFloor(floor.number);
   }
 
+  get size() {
+    return this[kBase].maxPassengerCount();
+  }
+
+  getFreeSpace() {
+    return (1 - this[kBase].loadFactor()) * this.size;
+  }
+
   isFull() {
     return this[kBase].loadFactor() >= 0.8;
   }
