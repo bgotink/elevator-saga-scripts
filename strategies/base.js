@@ -8,7 +8,7 @@ export default function createStrategy(initFn, updateFn) {
   return {
     init(els, fls) {
       floors = fls.map(fl => new Floor(fl));
-      elevators = els.map((el) => new Elevator(el, floors));
+      elevators = els.map((el, number) => new Elevator(number, el, floors));
 
       if (initFn) {
         return initFn(elevators, floors);

@@ -9,8 +9,10 @@ const kDirection = Symbol('direction');
 const kCurrentTarget = Symbol('currentTarget');
 
 export default class Elevator extends EventEmitter {
-  constructor(base, floors) {
+  constructor(id, base, floors) {
     super();
+
+    this.id = id;
 
     this[kBase] = base;
     this[kFloors] = floors;
@@ -19,14 +21,14 @@ export default class Elevator extends EventEmitter {
     this.direction = null;
 
     base.on('idle', _ => {
-      log.info `Elevator idle`;
+      log.info `Elevator ${id} idle`;
       this.continue();
     });
 
     // Schedule an important floor when a passenger selects a floor
     // But don't care about the direction
     base.on('floor_button_pressed', floor => {
-      log.info `Button for floor ${floor} pressed in elevator`;
+      log.info `Button for floor ${floor} pressed in elevator ${id}`;
       this.schedule(floors[floor]);
     });
   }
@@ -70,14 +72,14 @@ export default class Elevator extends EventEmitter {
     const { direction, floor } = this;
 
     if (requestedFloor === floor && !(this.isIdle() || this[kQueue].length === 0)) {
-      log.info `schedule: Scheduling ${requestedFloor} but we're already there (and moving ${direction})`;
+      log.info `schedule ${this.id}: Scheduling ${requestedFloor} but we're already there (and moving ${direction})`;
       return; // we're already on the requested floor
     }
 
     const requestedDirection = floor.getDirectionTo(requestedFloor);
 
     if (this.isIdle()) {
-      log.info `schedule: Elevator idle`
+      log.info `schedule ${this.id}: Elevator idle`
       this[kQueue].push(requestedFloor);
       this.direction = requestedDirection;
       this.continue();
@@ -87,7 +89,7 @@ export default class Elevator extends EventEmitter {
 
     if (direction !== requestedDirection) {
       if (requestedFloor !== floor) {
-        throw new Error(`Requested ${requestedFloor} in direction ${requestedDirection} (currently at ${floor}), but currently going in direction ${direction}`);
+        throw new Error(`Requested ${requestedFloor} in direction ${requestedDirection} (currently at ${floor}), but elevator ${this.id} currently going in direction ${direction}`);
       }
 
       this.goTo(floor);
@@ -98,7 +100,7 @@ export default class Elevator extends EventEmitter {
       if (requestedFloor < this[kCurrentTarget]) {
         // We pass the new request first, and only then we pass our current target
         // -> make the requested floor the first target
-        log.info `schedule: Inserting new floor before current queue`;
+        log.info `schedule ${this.id}: Inserting new floor before current queue`;
         this[kQueue].unshift(requestedFloor, this[kCurrentTarget]);
         this.continue();
         this.fire('schedule', requestedFloor);
@@ -109,7 +111,7 @@ export default class Elevator extends EventEmitter {
         if (requestedFloor < this[kQueue][i]) {
           // We pass the requested floor before queued floor _i_
           // -> insert the requested floor here
-          log.info `schedule: Inserting new floor at index ${i} in the queue`;
+          log.info `schedule ${this.id}: Inserting new floor at index ${i} in the queue`;
           this[kQueue].splice(i, 0, requestedFloor);
           // No need to call continue() here
           this.fire('schedule', requestedFloor);
@@ -118,13 +120,13 @@ export default class Elevator extends EventEmitter {
       }
 
       // We haven't inserted the floor anywhere -> add it to the end of the queue
-      log.info `schedule: Pushing new floor to end of the queue`;
+      log.info `schedule ${this.id}: Pushing new floor to end of the queue`;
       this[kQueue].push(requestedFloor);
     } else /*if (direction === 'down')*/ {
       if (requestedFloor > this[kCurrentTarget]) {
         // We pass the new request first, and only then we pass our current target
         // -> make the requested floor the first target
-        log.info `schedule: Inserting new floor before current queue`;
+        log.info `schedule ${this.id}: Inserting new floor before current queue`;
         this[kQueue].unshift(requestedFloor, this[kCurrentTarget]);
         this.continue();
         this.fire('schedule', requestedFloor);
@@ -135,7 +137,7 @@ export default class Elevator extends EventEmitter {
         if (requestedFloor > this[kQueue][i]) {
           // We pass the requested floor before queued floor _i_
           // -> insert the requested floor here
-          log.info `schedule: Inserting new floor at index ${i} in the queue`;
+          log.info `schedule ${this.id}: Inserting new floor at index ${i} in the queue`;
           this[kQueue].splice(i, 0, requestedFloor);
           // No need to call continue() here
           this.fire('schedule', requestedFloor);
@@ -144,16 +146,17 @@ export default class Elevator extends EventEmitter {
       }
 
       // We haven't inserted the floor anywhere -> add it to the end of the queue
-      log.info `schedule: Pushing new floor to end of the queue`;
+      log.info `schedule ${this.id}: Pushing new floor to end of the queue`;
       this[kQueue].push(requestedFloor);
       this.fire('schedule', requestedFloor);
     }
   }
 
   continue() {
-    log.info `continue: called`
+    log.info `continue ${this.id}: called`
+
     if (!this[kQueue].length) {
-      log.info `continue: nothing in the queue, stopping elevator & firing 'idle' event`
+      log.info `continue ${this.id}: nothing in the queue, stopping elevator & firing 'idle' event`
       this[kBase].stop();
       this.direction = null;
       this.fire('idle');
@@ -161,14 +164,14 @@ export default class Elevator extends EventEmitter {
     }
 
     this[kCurrentTarget] = this[kQueue].shift();
-    log.info `continue: going to ${this[kCurrentTarget]}`;
+    log.info `continue ${this.id}: going to ${this[kCurrentTarget]}`;
 
     this[kBase].stop();
     this.goTo(this[kCurrentTarget]);
   }
 
   start(floors, direction) {
-    log.info `start: going ${direction}: ${floors.join(' -> ')}`;
+    log.info `start ${this.id}: going ${direction}: ${floors.join(' -> ')}`;
     this.direction = direction;
     this[kQueue] = floors;
 
@@ -180,10 +183,10 @@ export default class Elevator extends EventEmitter {
       floor = this[kFloors][floor];
     }
 
-    log.info `goTo: going to ${floor}`;
+    log.info `goTo ${this.id}: going to ${floor}`;
 
     if (floor === this.floor) {
-      log.info `goTo: already at ${floor}`;
+      log.info `goTo ${this.id}: already at ${floor}`;
     }
 
     this[kBase].goToFloor(floor.number);
