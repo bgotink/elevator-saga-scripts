@@ -45,7 +45,7 @@ export default createStrategy(function init(elevators, floors) {
     }
 
     if (direction === 'up') {
-      if (floor < elevator.floor) {
+      if (floor <= elevator.floor) {
         // Elevator is going up but it's already above the requested floor
         nonScheduledRequests.push({ floor, direction });
         return;
@@ -53,7 +53,7 @@ export default createStrategy(function init(elevators, floors) {
 
       elevator.schedule(floor);
     } else /*if (direction === 'down')*/ {
-      if (floor > elevator.floor) {
+      if (floor >= elevator.floor) {
         // Elevator is going down but it's already below the requested floor
         nonScheduledRequests.push({ floor, direction });
         return;
