@@ -156,6 +156,7 @@ export default class Elevator extends EventEmitter {
   }
 
   start(floors, direction) {
+    log.info `start: going ${direction}: ${floors.join(' -> ')}`;
     this.direction = direction;
     this[kQueue] = floors;
 

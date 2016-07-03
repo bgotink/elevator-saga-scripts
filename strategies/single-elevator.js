@@ -17,9 +17,11 @@ export default createStrategy(function init(elevators, floors) {
 
   elevator.on('schedule', floor => {
     const { direction } = elevator;
+    log.info `Got 'schedule' event from elevator: ${floor} (${direction})`;
     const idx = findRequestIdx(nonScheduledRequests, floor, direction);
 
     if (idx !== -1) {
+      log.info `Unscheduling request for ${floor} (${direction}) because elevator will pass it by itself`;
       nonScheduledRequests.splice(idx, 1);
     }
   });
@@ -75,21 +77,11 @@ export default createStrategy(function init(elevators, floors) {
 
     const { floor: currentFloor } = elevator;
 
-    // Heuristic: check for which direction we can pick up the most people
-    // const requestsInDirection = {
-    //   up: 0,
-    //   down: 0,
-    // };
-    // nonScheduledRequests.forEach(({ direction }) => {
-    //   requestsInDirection[direction]++;
-    // });
-    //
-    // log.info `Found ${requestsInDirection.up} requests to go up and ${requestsInDirection.down} to go down`;
-    //
-    // const direction = requestsInDirection.up > requestsInDirection.down ? 'up' : 'down';
+    log.info `Currently at ${currentFloor}, requests are: ${nonScheduledRequests.map(({floor, direction}) => `${floor} (${direction})`).join(', ')}`
 
-    // Heuristic: take the oldest direction requested
-    const direction = nonScheduledRequests[0].direction;
+    // Heuristic: take the oldest direction requested within a reasonable distance
+    const direction = (nonScheduledRequests.find(request => request.floor.getDistance(currentFloor) < 3) || nonScheduledRequests[0]).direction;
+    log.info `Going for a ride ${direction}`;
 
     const requestsToWrite = [];
 
