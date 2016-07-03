@@ -1,0 +1,16 @@
+{
+  "name": "elevator-saga",
+  "version": "0.0.1",
+  "description": "",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:single-elevator": "rollup -f iife -n removeMe strategies/single-elevator.js | sed -e 's/var removeMe = //' -e '$ s/;$//'",
+    "copy:single-elevator": "rollup -f iife -n removeMe strategies/single-elevator.js | sed -e 's/var removeMe = //' -e '$ s/;$//' | pbcopy",
+    "build:multiple-elevators": "rollup -f iife -n removeMe strategies/multiple-elevators.js | sed -e 's/var removeMe = //' -e '$ s/;$//'",
+    "copy:multiple-elevators": "rollup -f iife -n removeMe strategies/multiple-elevators.js | sed -e 's/var removeMe = //' -e '$ s/;$//' | pbcopy"
+  },
+  "author": "Bram Gotink <bram@gotink.me>",
+  "license": "MIT"
+}
