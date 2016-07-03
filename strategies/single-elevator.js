@@ -1,6 +1,10 @@
 import createStrategy from './base';
 import * as log from '../log';
 
+function findRequestIdx(requests, floor, direction) {
+  return requests.findIndex(r => r.floor === floor && r.direction === direction);
+}
+
 export default createStrategy(function init(elevators, floors) {
   if (elevators.length !== 1) {
     throw new Error(`Single elevator strategy is not meant to be used for ${elevators.length} elevators`);
@@ -13,7 +17,7 @@ export default createStrategy(function init(elevators, floors) {
 
   elevator.on('schedule', floor => {
     const { direction } = elevator;
-    const idx = nonScheduledRequests.findIndex(request => request.floor === floor && request.direction === direction);
+    const idx = findRequestIdx(nonScheduledRequests, floor, direction);
 
     if (idx !== -1) {
       nonScheduledRequests.splice(idx, 1);
@@ -27,7 +31,7 @@ export default createStrategy(function init(elevators, floors) {
   });
 
   function scheduleRequest(floor, direction) {
-    if (nonScheduledRequests.some(request => request.floor === floor && request.direction === direction)) {
+    if (findRequestIdx(nonScheduledRequests, floor, direction) !== -1) {
       // already requested
       return;
     }
@@ -60,25 +64,33 @@ export default createStrategy(function init(elevators, floors) {
   function startElevator() {
     log.info `Calling startElevator()`;
 
-    if (!elevator.isIdle() || nonScheduledRequests.length === 0) {
-      log.info `Skipping startElevator()`;
+    if (!elevator.isIdle()) {
+      log.info `Skipping startElevator() because elevator is busy`;
+      return;
+    }
+    if (nonScheduledRequests.length === 0) {
+      log.info `Skipping startElevator() because there are no requests`;
       return;
     }
 
     const { floor: currentFloor } = elevator;
 
     // Heuristic: check for which direction we can pick up the most people
-    const requestsInDirection = {
-      up: 0,
-      down: 0,
-    };
-    nonScheduledRequests.forEach(({ floor, direction }) => {
-      requestsInDirection[direction]++;
-    });
+    // const requestsInDirection = {
+    //   up: 0,
+    //   down: 0,
+    // };
+    // nonScheduledRequests.forEach(({ direction }) => {
+    //   requestsInDirection[direction]++;
+    // });
+    //
+    // log.info `Found ${requestsInDirection.up} requests to go up and ${requestsInDirection.down} to go down`;
+    //
+    // const direction = requestsInDirection.up > requestsInDirection.down ? 'up' : 'down';
 
-    log.info `Found ${requestsInDirection.up} requests to go up and ${requestsInDirection.down} to go down`;
+    // Heuristic: take the oldest direction requested
+    const direction = nonScheduledRequests[0].direction;
 
-    const direction = requestsInDirection.up > requestsInDirection.down ? 'up' : 'down';
     const requestsToWrite = [];
 
     // Reverse loop because we're splicing
@@ -93,7 +105,7 @@ export default createStrategy(function init(elevators, floors) {
     log.info `Writing ${requestsToWrite.length} requests to the elevator`;
 
     requestsToWrite.sort((a, b) => {
-      return a.getDirectionTo(b) === direction ? -1 : 1;
+      return a.floor.getDirectionTo(b.floor) === direction ? -1 : 1;
     });
 
     elevator.start(requestsToWrite.map(({ floor }) => floor), direction);
