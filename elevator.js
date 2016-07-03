@@ -54,6 +54,18 @@ export default class Elevator extends EventEmitter {
     return this[kDirection] = dir;
   }
 
+  willPassBy(floor, direction) {
+    if (direction !== this.direction) {
+      return false;
+    }
+
+    if (this.direction === 'up') {
+      return floor > this.floor;
+    } else /*if (this.direction === 'down')*/ {
+      return floor < this.floor;
+    }
+  }
+
   schedule(requestedFloor) {
     const { direction, floor } = this;
 

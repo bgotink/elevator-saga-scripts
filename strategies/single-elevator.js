@@ -44,23 +44,12 @@ export default createStrategy(function init(elevators, floors) {
       return;
     }
 
-    if (direction === 'up') {
-      if (floor <= elevator.floor) {
-        // Elevator is going up but it's already above the requested floor
-        nonScheduledRequests.push({ floor, direction });
-        return;
-      }
-
+    if (elevator.willPassBy(floor, direction)) {
       elevator.schedule(floor);
-    } else /*if (direction === 'down')*/ {
-      if (floor >= elevator.floor) {
-        // Elevator is going down but it's already below the requested floor
-        nonScheduledRequests.push({ floor, direction });
-        return;
-      }
-
-      elevator.schedule(floor);
+      return;
     }
+
+    nonScheduledRequests.push({ floor, direction });
   }
 
   function startElevator() {
